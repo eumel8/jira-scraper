@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: jira-wiki-crawler
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: crawler
+            image: your-repo/jira-scraper:latest
+            env:
+            - name: JIRA_USER
+              valueFrom:
+                secretKeyRef:
+                  name: jira-creds
+                  key: username
+            - name: JIRA_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: jira-creds
+                  key: password
+            - name: LOGIN_URL
+              value: "https://your-org.atlassian.net/wiki/login"
+            - name: SPACE_URL
+              value: "https://your-org.atlassian.net/wiki/spaces/DOC/overview"
+            volumeMounts:
+            - mountPath: /data
+              name: wiki-data
+          restartPolicy: OnFailure
+          volumes:
+          - name: wiki-data
+            persistentVolumeClaim:
+              claimName: your-pvc
+
