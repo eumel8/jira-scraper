@@ -5,7 +5,7 @@ WORKDIR /app
 COPY go.mod ./
 RUN go mod download
 RUN go install github.com/playwright-community/playwright-go/cmd/playwright@latest
-RUN playwright install
+RUN /go/bin/playwright install
 
 COPY . .
 
