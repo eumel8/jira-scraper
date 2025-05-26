@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JohannesKaufmann/html-to-markdown"
+	markdown "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/playwright-community/playwright-go"
 )
 
@@ -83,7 +83,7 @@ func main() {
 		}
 
 		// Wait for content
-		err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
+		_, err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
 			Timeout: playwright.Float(10000),
 		})
 		if err != nil {
