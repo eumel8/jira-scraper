@@ -1,11 +1,16 @@
-FROM ghcr.io/mcsps/golang:1.0.8
+FROM ubuntu:noble
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y curl wget gpg ca-certificates golang-go
 
 WORKDIR /app
 
 COPY go.mod ./
 RUN go mod download
 RUN go install github.com/playwright-community/playwright-go/cmd/playwright@latest
-RUN /go/bin/playwright install
+RUN /root/go/bin/playwright install
 
 COPY . .
 
