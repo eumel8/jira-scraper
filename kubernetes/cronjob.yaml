@@ -18,7 +18,7 @@ spec:
             - mountPath: /data
               name: wiki-data
             - name: auth-json
-              mountPath: /app/auth.json
+              mountPath: /auth
               readOnly: true 
           restartPolicy: OnFailure
           volumes:
