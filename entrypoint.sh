@@ -1,5 +1,5 @@
 #!/bin/bash
 set -e
-mkdir -p /data
+#mkdir -p /data
 /app/scraper
 
