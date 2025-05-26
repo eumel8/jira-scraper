@@ -35,7 +35,7 @@ func main() {
 	}
 
 	context, err := browser.NewContext(playwright.BrowserNewContextOptions{
-		StorageStatePath: playwright.String("auth.json"), // session state
+		StorageStatePath: playwright.String("/auth/auth.json"), // session state
 	})
 	if err != nil {
 		panic(err)
