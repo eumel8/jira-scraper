@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/playwright:v1.52.0-noble
+FROM ubuntu:24.04
+#FROM mcr.microsoft.com/playwright:v1.52.0-noble
 
 WORKDIR /app
 
