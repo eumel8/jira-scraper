@@ -119,6 +119,8 @@ func main() {
 		fmt.Println("✅ Saved:", filePath)
 
 		// Discover more links
+	        fullWiki := os.Getenv("FULL_URL")
+	        fullPrefix := os.Getenv("FULL_PREFIX")
 		anchors, _ := page.QuerySelectorAll("a")
 		for _, anchor := range anchors {
 			href, _ := anchor.GetAttribute("href")
@@ -126,8 +128,8 @@ func main() {
 				continue
 			}
 			// Normalize and validate
-			if strings.HasPrefix(href, "/wiki/spaces/") && !strings.Contains(href, "#") {
-				fullURL := "https://your-org.atlassian.net" + href
+			if strings.HasPrefix(href, fullPrefix) && !strings.Contains(href, "#") {
+				fullURL := fullWiki + href
 				if !visited[fullURL] {
 					links[fullURL] = true
 				}
