@@ -109,7 +109,7 @@ func main() {
 		fmt.Println("✅ Saved:", filePath)
 
 		// Only crawl further if we haven't hit max depth
-		if current.Depth < 2 {
+		if current.Depth < 3 {
 			anchors, _ := page.QuerySelectorAll("a")
 			for _, a := range anchors {
 				href, _ := a.GetAttribute("href")
