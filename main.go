@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	markdown "github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/playwright-community/playwright-go"
-
+        "github.com/playwright-community/playwright-go"
 )
 
 func sanitizeFileName(name string) string {
@@ -19,6 +18,11 @@ func sanitizeFileName(name string) string {
 	name = strings.ReplaceAll(name, "&", "and")
 	name = strings.ReplaceAll(name, "#", "")
 	return strings.TrimSpace(name)
+}
+
+type QueueItem struct {
+	Url   string
+	Depth int
 }
 
 func main() {
@@ -43,7 +47,7 @@ func main() {
 	}
 
 	context, err := browser.NewContext(playwright.BrowserNewContextOptions{
-		StorageStatePath: playwright.String("/auth/auth.json"),
+		StorageStatePath: playwright.String("auth.json"),
 	})
 	if err != nil {
 		panic(err)
@@ -56,59 +60,25 @@ func main() {
 
 	converter := markdown.NewConverter("", true, nil)
 	visited := make(map[string]bool)
-	toVisit := []string{startURL}
+	queue := []QueueItem{{Url: startURL, Depth: 0}}
 
-	fmt.Println("📄 Visiting base page:", startURL)
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
 
-	// Step 1: Visit the base page and collect depth-1 links
-	_, err = page.Goto(startURL)
-	if err != nil {
-		panic(err)
-	}
-
-	_,err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
-		Timeout: playwright.Float(15000),
-	})
-	if err != nil {
-		panic("Base page has no .wiki-content")
-	}
-
-	anchors, _ := page.QuerySelectorAll("a")
-	for _, a := range anchors {
-		href, _ := a.GetAttribute("href")
-		if href == "" {
+		if visited[current.Url] {
 			continue
 		}
+		visited[current.Url] = true
 
-		// Convert relative to absolute
-		var full string
-		if strings.HasPrefix(href, "/") {
-			full = baseURL + href
-		} else if strings.HasPrefix(href, baseURL) {
-			full = href
-		} else {
-			continue // skip external
-		}
+		fmt.Printf("🔗 Crawling (depth %d): %s\n", current.Depth, current.Url)
 
-		if !visited[full] {
-			toVisit = append(toVisit, full)
-		}
-	}
-
-	// Step 2: Visit all collected depth-1 links
-	for _, link := range toVisit {
-		if visited[link] {
-			continue
-		}
-		visited[link] = true
-
-		fmt.Println("🔗 Crawling:", link)
-		_, err := page.Goto(link, playwright.PageGotoOptions{
+		_, err := page.Goto(current.Url, playwright.PageGotoOptions{
 			WaitUntil: playwright.WaitUntilStateNetworkidle,
 			Timeout:   playwright.Float(20000),
 		})
 		if err != nil {
-			fmt.Println("❌ Failed to load:", link)
+			fmt.Println("❌ Failed to load:", current.Url)
 			continue
 		}
 
@@ -116,7 +86,7 @@ func main() {
 			Timeout: playwright.Float(10000),
 		})
 		if err != nil {
-			fmt.Println("⚠️  No wiki-content found:", link)
+			fmt.Println("⚠️  No wiki-content found:", current.Url)
 			continue
 		}
 
@@ -125,7 +95,7 @@ func main() {
 
 		title, _ := page.Title()
 		if title == "" {
-			u, _ := url.Parse(link)
+			u, _ := url.Parse(current.Url)
 			title = u.Path
 		}
 
@@ -136,10 +106,33 @@ func main() {
 			fmt.Println("❌ Failed to save:", filePath)
 			continue
 		}
-
 		fmt.Println("✅ Saved:", filePath)
+
+		// Only crawl further if we haven't hit max depth
+		if current.Depth < 2 {
+			anchors, _ := page.QuerySelectorAll("a")
+			for _, a := range anchors {
+				href, _ := a.GetAttribute("href")
+				if href == "" {
+					continue
+				}
+
+				var full string
+				if strings.HasPrefix(href, "/wiki/") {
+					full = baseURL + href
+				} else if strings.HasPrefix(href, baseURL+"/wiki/") {
+					full = href
+				} else {
+					continue // skip external links
+				}
+
+				if !visited[full] {
+					queue = append(queue, QueueItem{Url: full, Depth: current.Depth + 1})
+				}
+			}
+		}
 	}
 
-	fmt.Println("✅ Done. Pages scraped:", len(visited))
+	fmt.Println("🎉 Done. Pages saved:", len(visited))
 }
 
