@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	markdown "github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/playwright-community/playwright-go"
+	"github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/mxschmitt/playwright-go"
 )
 
 func sanitizeFileName(name string) string {
@@ -21,6 +22,13 @@ func sanitizeFileName(name string) string {
 }
 
 func main() {
+	baseURL := os.Getenv("CONFLUENCE_BASE_URL") // e.g. https://your-org.atlassian.net
+	startURL := os.Getenv("SPACE_URL")          // e.g. https://your-org.atlassian.net/wiki/spaces/XYZ/overview
+
+	if baseURL == "" || startURL == "" {
+		panic("Missing CONFLUENCE_BASE_URL or SPACE_URL environment variables")
+	}
+
 	pw, err := playwright.Run()
 	if err != nil {
 		panic(err)
@@ -35,7 +43,7 @@ func main() {
 	}
 
 	context, err := browser.NewContext(playwright.BrowserNewContextOptions{
-		StorageStatePath: playwright.String("/auth/auth.json"), // session state
+		StorageStatePath: playwright.String("/auth/auth.json"),
 	})
 	if err != nil {
 		panic(err)
@@ -46,97 +54,92 @@ func main() {
 		panic(err)
 	}
 
-	startURL := os.Getenv("SPACE_URL")
-	if startURL == "" {
-		panic("Missing SPACE_URL environment variable")
+	converter := markdown.NewConverter("", true, nil)
+	visited := make(map[string]bool)
+	toVisit := []string{startURL}
+
+	fmt.Println("📄 Visiting base page:", startURL)
+
+	// Step 1: Visit the base page and collect depth-1 links
+	_, err = page.Goto(startURL)
+	if err != nil {
+		panic(err)
 	}
 
-	fmt.Println("🔗 Starting crawl at:", startURL)
+	err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
+		Timeout: playwright.Float(15000),
+	})
+	if err != nil {
+		panic("Base page has no .wiki-content")
+	}
 
-	visited := make(map[string]bool)
-	links := map[string]bool{startURL: true}
-
-	converter := markdown.NewConverter("", true, nil)
-
-	for len(links) > 0 {
-		var current string
-		for url := range links {
-			current = url
-			break
-		}
-		delete(links, current)
-
-		if visited[current] {
+	anchors, _ := page.QuerySelectorAll("a")
+	for _, a := range anchors {
+		href, _ := a.GetAttribute("href")
+		if href == "" {
 			continue
 		}
-		visited[current] = true
 
-		fmt.Println("🌐 Visiting:", current)
+		// Convert relative to absolute
+		var full string
+		if strings.HasPrefix(href, "/") {
+			full = baseURL + href
+		} else if strings.HasPrefix(href, baseURL) {
+			full = href
+		} else {
+			continue // skip external
+		}
 
-		_, err := page.Goto(current, playwright.PageGotoOptions{
+		if !visited[full] {
+			toVisit = append(toVisit, full)
+		}
+	}
+
+	// Step 2: Visit all collected depth-1 links
+	for _, link := range toVisit {
+		if visited[link] {
+			continue
+		}
+		visited[link] = true
+
+		fmt.Println("🔗 Crawling:", link)
+		_, err := page.Goto(link, playwright.PageGotoOptions{
 			WaitUntil: playwright.WaitUntilStateNetworkidle,
-			Timeout:   playwright.Float(30000),
+			Timeout:   playwright.Float(20000),
 		})
 		if err != nil {
-			fmt.Println("⚠️  Failed to load:", current)
+			fmt.Println("❌ Failed to load:", link)
 			continue
 		}
 
-		// Wait for content
-		_, err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
+		err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
 			Timeout: playwright.Float(10000),
 		})
 		if err != nil {
-			fmt.Println("⚠️  No wiki-content found:", current)
+			fmt.Println("⚠️  No wiki-content found:", link)
 			continue
 		}
 
-		html, err := page.InnerHTML(".wiki-content")
-		if err != nil {
-			fmt.Println("⚠️  Could not extract content:", current)
-			continue
+		html, _ := page.InnerHTML(".wiki-content")
+		md, _ := converter.ConvertString(html)
+
+		title, _ := page.Title()
+		if title == "" {
+			u, _ := url.Parse(link)
+			title = u.Path
 		}
 
-		markdown, err := converter.ConvertString(html)
+		filename := sanitizeFileName(title) + ".md"
+		filePath := filepath.Join("/data", filename)
+		err = os.WriteFile(filePath, []byte(md), 0644)
 		if err != nil {
-			fmt.Println("⚠️  Markdown conversion failed:", current)
-			continue
-		}
-
-		title, err := page.Title()
-		if err != nil || title == "" {
-			title = fmt.Sprintf("untitled-%d", time.Now().Unix())
-		}
-
-		safeFileName := sanitizeFileName(title) + ".md"
-		filePath := filepath.Join("/data", safeFileName)
-		err = os.WriteFile(filePath, []byte(markdown), 0644)
-		if err != nil {
-			fmt.Println("❌ Failed to write file:", filePath)
+			fmt.Println("❌ Failed to save:", filePath)
 			continue
 		}
 
 		fmt.Println("✅ Saved:", filePath)
-
-		// Discover more links
-	        fullWiki := os.Getenv("FULL_URL")
-	        fullPrefix := os.Getenv("FULL_PREFIX")
-		anchors, _ := page.QuerySelectorAll("a")
-		for _, anchor := range anchors {
-			href, _ := anchor.GetAttribute("href")
-			if href == "" {
-				continue
-			}
-			// Normalize and validate
-			if strings.HasPrefix(href, fullPrefix) && !strings.Contains(href, "#") {
-				fullURL := fullWiki + href
-				if !visited[fullURL] {
-					links[fullURL] = true
-				}
-			}
-		}
 	}
 
-	fmt.Println("🎉 Finished crawling.")
+	fmt.Println("✅ Done. Pages scraped:", len(visited))
 }
 
