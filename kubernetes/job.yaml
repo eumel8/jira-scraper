@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jira-wiki-crawler
+spec:
+  backoffLimit: 1
+  completions: 1
+  parallelism: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: crawler
+        image: ghcr.io/eumel8/jira-scraper/jira-scraper:main
+        imagePullPolicy: Always
+        env:
+        - name: FULL_URL
+          value: "https://wiki.example.com"
+        - name: FULL_PREFIX
+          value: "https://wiki.example.com/collector/pages.action?key=EXAMPLE"
+        - name: SPACE_URL
+          value: "https://wiki.example.com/pages/viewpage.action?spaceKey=EXAMPLE&title=Foo"
+        volumeMounts:
+        - mountPath: /data
+          name: wiki-data
+        - name: auth-json
+          mountPath: /auth
+          readOnly: true 
+      volumes:
+      - name: wiki-data
+        persistentVolumeClaim:
+          claimName: wiki-data
+      - name: auth-json
+        secret:
+          secretName: auth-json
+          items:
+          - key: auth.json
+            path: auth.json
