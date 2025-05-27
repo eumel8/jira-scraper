@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/JohannesKaufmann/html-to-markdown"
+	markdown "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/playwright-community/playwright-go"
+
 )
 
 func sanitizeFileName(name string) string {
@@ -66,7 +66,7 @@ func main() {
 		panic(err)
 	}
 
-	err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
+	_,err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
 		Timeout: playwright.Float(15000),
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ func main() {
 			continue
 		}
 
-		err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
+		_,err = page.WaitForSelector(".wiki-content", playwright.PageWaitForSelectorOptions{
 			Timeout: playwright.Float(10000),
 		})
 		if err != nil {
