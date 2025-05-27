@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/mxschmitt/playwright-go"
+	"github.com/playwright-community/playwright-go"
 )
 
 func sanitizeFileName(name string) string {
