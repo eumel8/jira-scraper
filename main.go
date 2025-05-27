@@ -28,6 +28,7 @@ type QueueItem struct {
 func main() {
 	baseURL := os.Getenv("CONFLUENCE_BASE_URL") // e.g. https://your-org.atlassian.net
 	startURL := os.Getenv("SPACE_URL")          // e.g. https://your-org.atlassian.net/wiki/spaces/XYZ/overview
+	maxDepth := 2
 
 	if baseURL == "" || startURL == "" {
 		panic("Missing CONFLUENCE_BASE_URL or SPACE_URL environment variables")
@@ -109,25 +110,28 @@ func main() {
 		fmt.Println("✅ Saved:", filePath)
 
 		// Only crawl further if we haven't hit max depth
-		if current.Depth < 3 {
-			anchors, _ := page.QuerySelectorAll("a")
-			for _, a := range anchors {
-				href, _ := a.GetAttribute("href")
-				if href == "" {
+		if current.Depth < maxDepth {
+			// Wait for links to load
+			page.WaitForTimeout(2000) // small pause to ensure JS-rendered links are there
+
+			// Extract all anchor hrefs from the DOM via JS
+			hrefs, err := page.Evaluate(`Array.from(document.querySelectorAll('a'))
+				.map(a => a.href)
+				.filter(href => href.includes('/'))`)
+			if err != nil {
+				fmt.Println("❌ Failed to extract links:", err)
+				continue
+			}
+
+			rawLinks := hrefs.([]interface{})
+			for _, raw := range rawLinks {
+				link := raw.(string)
+				if !strings.HasPrefix(link, baseURL+"/") {
 					continue
 				}
-
-				var full string
-				if strings.HasPrefix(href, "/wiki/") {
-					full = baseURL + href
-				} else if strings.HasPrefix(href, baseURL+"/wiki/") {
-					full = href
-				} else {
-					continue // skip external links
-				}
-
-				if !visited[full] {
-					queue = append(queue, QueueItem{Url: full, Depth: current.Depth + 1})
+				if _, seen := visited[link]; !seen {
+					fmt.Println("🔍 Found link:", link)
+					queue = append(queue, QueueItem{Url: link, Depth: current.Depth + 1})
 				}
 			}
 		}
